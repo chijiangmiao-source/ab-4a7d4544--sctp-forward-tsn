@@ -1,0 +1,35 @@
+name: sctp-relay-audit
+
+services:
+  app:
+    build: .
+    image: sctp-relay-audit:latest
+    # 宿主端口可通过 HOST_PORT 环境变量配置，默认 8080
+    ports:
+      - "${HOST_PORT:-8080}:8080"
+    environment:
+      PORT: "8080"
+      AUDIT_DATA_DIR: /data/audits
+    volumes:
+      - audit-data:/data
+    healthcheck:
+      test: ["CMD", "python", "-c",
+             "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/health', timeout=2)"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 5s
+
+  # 一次性验证：代码测试 + 构建检查 + 对 app 的 API/HTTP 冒烟，
+  # 完成后退出并以退出码报告结果：
+  #   docker compose up verify --exit-code-from verify
+  verify:
+    image: sctp-relay-audit:latest
+    build: .
+    depends_on:
+      app:
+        condition: service_healthy
+    command: ["python", "-m", "tests.verify", "--base-url", "http://app:8080"]
+
+volumes:
+  audit-data:
